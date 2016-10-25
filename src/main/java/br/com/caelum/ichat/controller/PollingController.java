@@ -92,23 +92,4 @@ public class PollingController {
 		client.setResult(message);
 	}
 
-//	private Message getMessageFrom(HttpServletRequest req) throws IOException {
-//		StringBuilder builder = new StringBuilder();
-//		Scanner scanner = new Scanner(req.getInputStream());
-//		
-//		String s = null;
-//		while(scanner.hasNextLine()) {
-//			s = scanner.nextLine();
-//			builder.append(s);
-//		}
-//		
-//		scanner.close();
-//		return getMessageFrom(builder.toString());
-//	}
-	
-//	private Message getMessageFrom(String json) {
-//		Message message = new Gson().fromJson(json, Message.class);
-//		return message;
-//	}
-	
 }
