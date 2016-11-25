@@ -1,14 +1,11 @@
 package br.com.caelum.ichat.controller;
 
-import java.io.IOException;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import javax.annotation.PostConstruct;
-import javax.servlet.ServletException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -19,6 +16,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.context.request.async.DeferredResult;
 
+import br.com.caelum.ichat.callback.TimeoutCallback;
+import br.com.caelum.ichat.callbacks.ClientCallback;
 import br.com.caelum.ichat.model.Message;
 
 @Controller
@@ -29,67 +28,48 @@ public class PollingController {
 	private Queue<DeferredResult<Message>> clients = new ConcurrentLinkedQueue<>();
 	
 	@PostConstruct
-	public void init() throws ServletException {
-		Executors.newSingleThreadExecutor().execute(new Runnable() {
+	public void init()  {
+		new Thread(new Runnable() {
 			@Override
 			public void run() {
-				for(;;) {
+				while(true) {
 					try {
-						// its block until receive message
 						Message message = messages.take();
 						sendToClients(message);
-					} catch (InterruptedException e) {
+					} catch (Exception e) {
 						e.printStackTrace();
 					}
 				}
 			}
+		}).start();
+	}
 
-		});
+	private void sendToClients(Message message)  {
+		for (DeferredResult<Message> client : clients) {
+			client.setResult(message);
+		}
 	}
 	
 	@ResponseBody
 	@RequestMapping(method=RequestMethod.GET)
-	public DeferredResult<Message> ouvirMensagem() throws ServletException, IOException {
-		final DeferredResult<Message> result = new DeferredResult<>(20 * 1000L);
-		result.onTimeout(new Runnable() {
-			@Override
-			public void run() {
-				clients.remove(result);
-				result.setResult(new Message());
-			}
-		});
-		result.onCompletion(new Runnable() {
-			@Override
-			public void run() {
-				clients.remove(result);
-			}
-		});
+	public DeferredResult<Message> ouvirMensagem()  {
 		
+		long timeout = 20 * 1000L;
+		final DeferredResult<Message> client = new DeferredResult<>(timeout);
 		
+		TimeoutCallback timeoutCallback = new TimeoutCallback(client, clients);
+		ClientCallback clientCallback = new ClientCallback(client, clients);
 		
-		clients.offer(result);
-		return result;
+		client.onTimeout(timeoutCallback);
+		client.onCompletion(clientCallback);
+		
+		clients.offer(client);
+		return client;
 	}
 
 	@RequestMapping(method=RequestMethod.POST)
 	@ResponseStatus(HttpStatus.OK)
-	public void doPost(@RequestBody Message message) throws ServletException, IOException {
+	public void doPost(@RequestBody Message message)  {
 		messages.add(message);
 	}
-	
-	private void sendToClients(Message message) {
-		for (DeferredResult<Message> client : clients) {
-			try {
-				writeResponseFor(client, message);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-		
-	}
-
-	private void writeResponseFor(DeferredResult<Message> client, Message message) throws IOException {
-		client.setResult(message);
-	}
-
 }
